@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "242666085306",
+    "project_id": "roboapp-c3064",
+    "storage_bucket": "roboapp-c3064.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:242666085306:android:6c708f33f24274e0c41b83",
+        "android_client_info": {
+          "package_name": "com.example.roboapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBazuuTB4VY7DVHF3MxpbwHgpAXBSzjJ8w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Roboapp</string>
+    <string name="default_web_client_id">TU_WEB_CLIENT_ID_AQUI</string>
 </resources>
