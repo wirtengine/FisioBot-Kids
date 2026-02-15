@@ -1,147 +1,194 @@
 package com.example.roboapp.ui.screens.login
 
-import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.roboapp.data.model.RoboUser
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import com.example.roboapp.R
-
-data class AuthState(
-    val isLoading: Boolean = false,
-    val isSuccess: Boolean = false,
-    val errorMessage: String? = null,
-    val user: RoboUser? = null
-)
 
 class AuthViewModel : ViewModel() {
-    private val auth: FirebaseAuth = Firebase.auth
-    private val firestore: FirebaseFirestore = Firebase.firestore
 
-    private val _registerState = MutableStateFlow(AuthState())
-    val registerState: StateFlow<AuthState> = _registerState
+    private val auth = FirebaseAuth.getInstance()
+    private val db = FirebaseFirestore.getInstance()
 
-    private val _loginState = MutableStateFlow(AuthState())
-    val loginState: StateFlow<AuthState> = _loginState
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading
 
-    private lateinit var googleSignInClient: GoogleSignInClient
+    val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage
 
-    fun initGoogleSignIn(context: Context) {
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(context.getString(R.string.default_web_client_id))
-            .requestEmail()
-            .build()
-        googleSignInClient = GoogleSignIn.getClient(context, gso)
-    }
-
-    fun getGoogleSignInClient(): GoogleSignInClient = googleSignInClient
-
-    // ========== REGISTRO CON EMAIL Y CONTRASEÑA ==========
-    fun registerUser(email: String, password: String, username: String, userType: String) {
+    // Registro con email/contraseña
+    fun registerWithEmail(
+        email: String,
+        password: String,
+        username: String,
+        role: RegisterUserType,
+        onSuccess: () -> Unit
+    ) {
         viewModelScope.launch {
-            _registerState.value = AuthState(isLoading = true)
+            _isLoading.value = true
             try {
-                val authResult = auth.createUserWithEmailAndPassword(email, password).await()
-                val uid = authResult.user?.uid ?: throw Exception("Error al crear usuario")
-
-                val newUser = RoboUser(
-                    uid = uid,
-                    email = email,
-                    username = username,
-                    userType = userType
-                )
-                firestore.collection("users").document(uid).set(newUser).await()
-
-                _registerState.value = AuthState(isSuccess = true, user = newUser)
+                val result = auth.createUserWithEmailAndPassword(email, password).await()
+                val user = result.user
+                if (user != null) {
+                    saveUserToFirestore(
+                        uid = user.uid,
+                        email = email,
+                        username = username,
+                        role = role,
+                        onSuccess = onSuccess,
+                        onError = { error ->
+                            _errorMessage.value = error
+                            user.delete()
+                        }
+                    )
+                }
             } catch (e: Exception) {
-                _registerState.value = AuthState(errorMessage = e.message ?: "Error desconocido")
+                _errorMessage.value = e.message
+            } finally {
+                _isLoading.value = false
             }
         }
     }
 
-    // ========== LOGIN CON EMAIL Y CONTRASEÑA (CON VALIDACIÓN DE TIPO) ==========
-    fun loginWithEmail(email: String, password: String, expectedType: String) {
+    // Inicio de sesión con email/contraseña
+    fun loginWithEmail(email: String, password: String, onSuccess: (role: String) -> Unit) {
         viewModelScope.launch {
-            _loginState.value = AuthState(isLoading = true)
+            _isLoading.value = true
             try {
-                val authResult = auth.signInWithEmailAndPassword(email, password).await()
-                val firebaseUser = authResult.user ?: throw Exception("Usuario no encontrado")
-
-                val userDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
-                val user = userDoc.toObject(RoboUser::class.java)
-
-                if (user == null) {
-                    throw Exception("Usuario no registrado correctamente")
+                val result = auth.signInWithEmailAndPassword(email, password).await()
+                val user = result.user
+                if (user != null) {
+                    val document = db.collection("users").document(user.uid).get().await()
+                    val role = document.getString("role") ?: "child"
+                    onSuccess(role)
                 }
-
-                if (user.userType != expectedType) {
-                    auth.signOut()
-                    throw Exception("Esta cuenta no es de tipo ${expectedType.lowercase()}")
-                }
-
-                _loginState.value = AuthState(isSuccess = true, user = user)
             } catch (e: Exception) {
-                _loginState.value = AuthState(errorMessage = e.message ?: "Error al iniciar sesión")
+                _errorMessage.value = e.message
+            } finally {
+                _isLoading.value = false
             }
         }
     }
 
-    // ========== LOGIN CON GOOGLE (CON VALIDACIÓN DE TIPO) ==========
-    fun signInWithGoogle(idToken: String, expectedType: String) {
+    // Autenticación con Google
+    fun firebaseAuthWithGoogle(
+        idToken: String,
+        onFirstTime: () -> Unit,
+        onSuccess: (role: String) -> Unit
+    ) {
         viewModelScope.launch {
-            _loginState.value = AuthState(isLoading = true)
+            _isLoading.value = true
             try {
+                Log.d("GoogleFlow", "Iniciando firebaseAuthWithGoogle")
                 val credential = GoogleAuthProvider.getCredential(idToken, null)
-                val authResult = auth.signInWithCredential(credential).await()
-                val firebaseUser = authResult.user ?: throw Exception("Error al autenticar con Google")
-
-                val userDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
-
-                if (userDoc.exists()) {
-                    val user = userDoc.toObject(RoboUser::class.java)!!
-                    if (user.userType != expectedType) {
-                        auth.signOut()
-                        googleSignInClient.signOut()
-                        throw Exception("Esta cuenta de Google ya está registrada como ${user.userType.lowercase()} y no puede acceder como ${expectedType.lowercase()}")
+                val result = auth.signInWithCredential(credential).await()
+                val user = result.user
+                Log.d("GoogleFlow", "Usuario autenticado: ${user?.email}")
+                if (user != null) {
+                    val document = db.collection("users").document(user.uid).get().await()
+                    Log.d("GoogleFlow", "Documento existe? ${document.exists()}")
+                    if (document.exists()) {
+                        val role = document.getString("role") ?: "child"
+                        Log.d("GoogleFlow", "Rol existente: $role, llamando onSuccess")
+                        onSuccess(role)
+                    } else {
+                        Log.d("GoogleFlow", "Primera vez, llamando onFirstTime")
+                        onFirstTime()
                     }
-                    _loginState.value = AuthState(isSuccess = true, user = user)
-                } else {
-                    auth.signOut()
-                    googleSignInClient.signOut()
-                    throw Exception("Usuario no registrado. Por favor, crea una cuenta primero.")
                 }
             } catch (e: Exception) {
-                _loginState.value = AuthState(errorMessage = e.message ?: "Error con Google Sign-In")
+                Log.e("GoogleFlow", "Error: ${e.message}")
+                _errorMessage.value = e.message
+            } finally {
+                _isLoading.value = false
             }
         }
     }
 
-    // ========== CERRAR SESIÓN ==========
-    fun signOut() {
-        auth.signOut()
-        if (::googleSignInClient.isInitialized) {
-            googleSignInClient.signOut()
+    // Guardar datos del usuario después de elegir rol (Google first time) con campos adicionales
+    fun saveGoogleUserWithPassword(
+        role: RegisterUserType,
+        username: String,
+        age: Int?,
+        password: String?,
+        onSuccess: () -> Unit
+    ) {
+        val user = auth.currentUser ?: return
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val code = generateUniqueCode()
+                val roboUser = RoboUser(
+                    uid = user.uid,
+                    email = user.email ?: "",
+                    username = username,
+                    age = age,
+                    role = role.name.lowercase(),
+                    code = code
+                )
+                db.collection("users").document(user.uid).set(roboUser).await()
+
+                // Si se proporcionó contraseña, actualizarla en Firebase Auth
+                if (!password.isNullOrBlank()) {
+                    user.updatePassword(password).await()
+                }
+                onSuccess()
+            } catch (e: Exception) {
+                _errorMessage.value = e.message
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
-    fun resetRegisterState() {
-        _registerState.value = AuthState()
+    // Guardar usuario en Firestore (método auxiliar)
+    private suspend fun saveUserToFirestore(
+        uid: String,
+        email: String,
+        username: String,
+        role: RegisterUserType,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        try {
+            val code = generateUniqueCode()
+            val roboUser = RoboUser(
+                uid = uid,
+                email = email,
+                username = username,
+                role = role.name.lowercase(),
+                code = code
+            )
+            db.collection("users").document(uid).set(roboUser).await()
+            onSuccess()
+        } catch (e: Exception) {
+            onError(e.message ?: "Error al guardar usuario")
+        }
     }
 
-    fun resetLoginState() {
-        _loginState.value = AuthState()
+    // Generar código único de 6 caracteres
+    private suspend fun generateUniqueCode(): String {
+        val charset = ('A'..'Z') + ('0'..'9')
+        var code: String
+        var exists: Boolean
+        do {
+            code = (1..6)
+                .map { charset.random() }
+                .joinToString("")
+            val query = db.collection("users").whereEqualTo("code", code).get().await()
+            exists = !query.isEmpty
+        } while (exists)
+        return code
+    }
+
+    fun clearError() {
+        _errorMessage.value = null
     }
 }
