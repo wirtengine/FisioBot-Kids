@@ -1,42 +1,38 @@
 package com.example.roboapp.ui.screens.login
 
 import android.app.Activity
-import android.content.Intent
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.roboapp.R
+import com.example.roboapp.data.model.RegisterUserType   // ✅ Único enum
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
-import kotlinx.coroutines.launch
 
+// Mantenemos UserType para la UI (selector de perfil)
 enum class UserType(val displayName: String) {
     CHILD("👶 Niño"),
     THERAPIST("👩‍⚕️ Terapeuta")
@@ -48,20 +44,12 @@ fun LoginScreen(
     onLoginChild: () -> Unit,
     onLoginTherapist: () -> Unit,
     onRegister: () -> Unit,
-    onForgotPassword: () -> Unit = {},
     onFirstTimeGoogle: () -> Unit,
     viewModel: AuthViewModel = viewModel()
 ) {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var userType by remember { mutableStateOf(UserType.CHILD) }
+    var userType by rememberSaveable { mutableStateOf(UserType.CHILD) }
 
-    val focusManager = LocalFocusManager.current
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val scrollState = rememberScrollState()
-
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
@@ -74,11 +62,13 @@ fun LoginScreen(
         }
     }
 
-    val isFormValid = username.isNotBlank() && password.length >= 6
+    /* ---------------- Google Config ---------------- */
+
+    val webClientId = stringResource(R.string.default_web_client_id)
 
     val googleSignInClient = remember {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestIdToken(webClientId)
             .requestEmail()
             .build()
         GoogleSignIn.getClient(context, gso)
@@ -94,280 +84,181 @@ fun LoginScreen(
                 account.idToken?.let { idToken ->
                     viewModel.firebaseAuthWithGoogle(
                         idToken = idToken,
-                        onFirstTime = onFirstTimeGoogle,
-                        onSuccess = { role ->
-                            if (role == "child") onLoginChild() else onLoginTherapist()
+                        onExistingUser = { role ->
+                            // role es de tipo RegisterUserType (del paquete data.model)
+                            when (role) {
+                                RegisterUserType.CHILD -> onLoginChild()
+                                RegisterUserType.THERAPIST -> onLoginTherapist()
+                            }
+                        },
+                        onNewUser = {
+                            onFirstTimeGoogle()
                         }
                     )
                 }
             } catch (e: ApiException) {
-                viewModel._errorMessage.value = "Error al iniciar sesión con Google"
+                Log.e("Login", "Google Sign In Error", e)
             }
         }
     }
 
+    /* ---------------- Animations ---------------- */
+
+    val fadeIn by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(800)
+    )
+
+    val pulse by rememberInfiniteTransition().animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = EaseInOutCubic),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    /* ---------------- UI ---------------- */
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
-        Column(
+    ) { padding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(scrollState)
-                .systemBarsPadding()
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFE3F2FD),
+                            Color(0xFFF8FBFF)
+                        )
+                    )
+                )
+                .padding(padding)
+                .padding(24.dp)
         ) {
-            // Logo y título
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.logo_robo),
-                    contentDescription = "Logo de RoboApp",
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(RoundedCornerShape(20.dp)),
-                    contentScale = ContentScale.Crop
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "RoboApp",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                Text(
-                    text = "Terapia asistida por robots",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Card del formulario
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(fadeIn)
+                    .align(Alignment.Center),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp)
+                    modifier = Modifier.padding(28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Selector tipo de usuario
-                    Text(
-                        text = "Tipo de usuario",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                    Image(
+                        painter = painterResource(id = R.drawable.logo_robo),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(100.dp)
+                            .alpha(pulse),
+                        contentScale = ContentScale.Fit
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "🤖 RoboApp",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color(0xFF1565C0)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Terapia asistida por robots para potenciar el desarrollo infantil y facilitar el trabajo clínico.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = Color.Gray
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    Text(
+                        text = "Selecciona tu perfil",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color(0xFF1565C0)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            .height(52.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFFE3F2FD)),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         UserType.values().forEach { type ->
                             val isSelected = userType == type
+                            val animatedColor by animateColorAsState(
+                                targetValue = if (isSelected) Color.White else Color.Transparent,
+                                label = ""
+                            )
+
                             Surface(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight(),
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                shape = RoundedCornerShape(14.dp),
+                                color = animatedColor,
                                 onClick = { userType = type }
                             ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
+                                Box(contentAlignment = Alignment.Center) {
                                     Text(
                                         text = type.displayName,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (isSelected)
-                                            MaterialTheme.colorScheme.onPrimaryContainer
-                                        else
-                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isSelected) Color(0xFF1565C0) else Color.Gray
                                     )
                                 }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(40.dp))
 
-                    // Campo usuario/correo
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = { username = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Usuario o correo") },
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        keyboardActions = KeyboardActions(
-                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Campo contraseña
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Contraseña") },
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true,
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(
-                            onDone = { focusManager.clearFocus() }
-                        ),
-                        trailingIcon = {
-                            TextButton(
-                                onClick = { passwordVisible = !passwordVisible },
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Text(
-                                    text = if (passwordVisible) "OCULTAR" else "MOSTRAR",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        }
-                    )
-
-                    TextButton(
-                        onClick = onForgotPassword,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("¿Olvidaste tu contraseña?")
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Botón de login
                     Button(
                         onClick = {
-                            viewModel.loginWithEmail(
-                                email = username,
-                                password = password,
-                                onSuccess = { role ->
-                                    if (role == "child") onLoginChild() else onLoginTherapist()
-                                }
-                            )
+                            googleLauncher.launch(googleSignInClient.signInIntent)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = isFormValid && !isLoading
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
                             )
                         } else {
-                            Text("Ingresar")
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_google),
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Continuar con Google",
+                                color = Color.White
+                            )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                    // Divisor "O"
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Divider(modifier = Modifier.weight(1f))
-                        Text(
-                            text = "O",
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Divider(modifier = Modifier.weight(1f))
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Botón de Google
-                    OutlinedButton(
-                        onClick = { googleLauncher.launch(googleSignInClient.signInIntent) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color.Gray)
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_google),
-                            contentDescription = "Google",
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Continuar con Google")
-                    }
-                }
-            }
-
-            // Spacer flexible para empujar el enlace hacia abajo
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Enlace a registro (siempre visible)
-            Row(
-                modifier = Modifier.padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "¿No tienes una cuenta?",
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                TextButton(onClick = onRegister) {
                     Text(
-                        text = "Crear cuenta",
-                        color = MaterialTheme.colorScheme.primary
+                        text = "Acceso seguro y cifrado. Cumplimos estándares de confidencialidad clínica.",
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        color = Color.Gray
                     )
-                }
-            }
-
-            // Info exclusiva para terapeutas
-            if (userType == UserType.THERAPIST) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f),
-                    border = BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Para terapeutas",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        Text(
-                            text = "Accede al panel de pacientes y configuración de terapias",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
                 }
             }
         }

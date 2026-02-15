@@ -1,50 +1,44 @@
 package com.example.roboapp.ui.screens.login
 
-import androidx.compose.foundation.border
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.roboapp.data.model.RegisterUserType   // ✅ Importamos el enum compartido
 import com.google.firebase.auth.FirebaseAuth
+
+// ❌ Eliminamos la definición local del enum
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChooseRoleScreen(
-    onRoleSelected: (RegisterUserType, String, Int?, String?) -> Unit,
+    onRoleSelected: (RegisterUserType, String, Int) -> Unit,
     onBack: () -> Unit,
     viewModel: AuthViewModel = viewModel()
 ) {
     var selectedRole by remember { mutableStateOf(RegisterUserType.CHILD) }
     var username by remember { mutableStateOf("") }
     var age by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var confirmPasswordVisible by remember { mutableStateOf(false) }
 
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Obtener correo del usuario actual
     val currentUser = FirebaseAuth.getInstance().currentUser
-    val email = currentUser?.email ?: ""
+    val email = currentUser?.email ?: "correo@no.disponible"
 
-    // Mostrar errores
+    // Mostrar errores del ViewModel
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -52,16 +46,14 @@ fun ChooseRoleScreen(
         }
     }
 
-    // Validaciones
-    val isPasswordValid = password.length >= 8 || password.isBlank()
-    val isConfirmPasswordValid = password == confirmPassword
-    val isFormValid = username.isNotBlank() &&
-            (password.isBlank() || (isPasswordValid && isConfirmPasswordValid))
+    // Validación del formulario
+    val ageInt = age.toIntOrNull()
+    val isFormValid = username.isNotBlank() && ageInt != null
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Completa tu registro") },
+                title = { Text("👤 Completa tu perfil") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
@@ -75,143 +67,131 @@ fun ChooseRoleScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(horizontal = 28.dp),
             verticalArrangement = Arrangement.Center
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ElevatedCard(
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.elevatedCardElevation(6.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(
-                    modifier = Modifier.padding(24.dp)
-                ) {
+                Column(modifier = Modifier.padding(28.dp)) {
                     Text(
-                        text = "Bienvenido a RoboApp",
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        text = "Configura tu cuenta en RoboApp 🤖",
+                        style = MaterialTheme.typography.headlineSmall
                     )
 
-                    // Correo electrónico (no editable)
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Correo electrónico (solo lectura)
                     OutlinedTextField(
                         value = email,
                         onValueChange = {},
                         label = { Text("Correo electrónico") },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = false,
                         readOnly = true,
-                        shape = RoundedCornerShape(12.dp)
+                        enabled = false,
+                        shape = RoundedCornerShape(14.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                    // Selector de rol
                     Text(
-                        text = "¿Quién eres?",
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        text = "Selecciona tu rol",
+                        style = MaterialTheme.typography.labelLarge
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Selector de rol con animación
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         RegisterUserType.values().forEach { type ->
                             val isSelected = selectedRole == type
+                            val animatedElevation by animateDpAsState(
+                                targetValue = if (isSelected) 12.dp else 4.dp,
+                                label = "elevation_${type.name}"
+                            )
+                            val scale by animateFloatAsState(
+                                targetValue = if (isSelected) 1.05f else 1f,
+                                label = "scale_${type.name}"
+                            )
+
                             Card(
+                                onClick = { selectedRole = type },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(80.dp)
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ),
-                                shape = RoundedCornerShape(12.dp),
-                                onClick = { selectedRole = type }
+                                    .height(100.dp)
+                                    .scale(scale),
+                                elevation = CardDefaults.cardElevation(animatedElevation),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected)
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.surface
+                                )
                             ) {
                                 Column(
                                     modifier = Modifier.fillMaxSize(),
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center
                                 ) {
-                                    Text(type.emoji, style = MaterialTheme.typography.headlineMedium)
-                                    Text(type.displayName)
+                                    Text(
+                                        text = type.emoji,
+                                        style = MaterialTheme.typography.headlineLarge
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = type.displayName,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
                                 }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                    // Nombre de usuario
+                    // Nombre completo
                     OutlinedTextField(
                         value = username,
                         onValueChange = { username = it },
-                        label = { Text("Nombre de usuario") },
+                        label = { Text("Nombre completo") },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
                         singleLine = true,
-                        isError = username.isBlank()
+                        shape = RoundedCornerShape(14.dp)
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Edad (opcional)
+                    // Edad (solo números)
                     OutlinedTextField(
                         value = age,
-                        onValueChange = { age = it.filter { char -> char.isDigit() } },
-                        label = { Text("Edad (opcional)") },
+                        onValueChange = { newValue ->
+                            age = newValue.filter { it.isDigit() }
+                        },
+                        label = { Text("Edad") },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
                         singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(28.dp))
 
-                    // Contraseña (opcional)
-                    PasswordField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = "Contraseña (opcional)",
-                        isVisible = passwordVisible,
-                        onVisibilityToggle = { passwordVisible = !passwordVisible },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (password.isNotBlank()) {
-                        PasswordField(
-                            value = confirmPassword,
-                            onValueChange = { confirmPassword = it },
-                            label = "Confirmar contraseña",
-                            isVisible = confirmPasswordVisible,
-                            onVisibilityToggle = { confirmPasswordVisible = !confirmPasswordVisible },
-                            modifier = Modifier.fillMaxWidth(),
-                            isError = !isConfirmPasswordValid && confirmPassword.isNotBlank()
-                        )
-                        if (!isConfirmPasswordValid && confirmPassword.isNotBlank()) {
-                            Text(
-                                text = "Las contraseñas no coinciden",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Botón continuar
+                    // Botón finalizar
                     Button(
                         onClick = {
-                            val ageInt = age.toIntOrNull()
-                            onRoleSelected(selectedRole, username, ageInt, password.takeIf { it.isNotBlank() })
+                            ageInt?.let { validAge ->
+                                onRoleSelected(selectedRole, username, validAge)
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = isFormValid && !isLoading,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(14.dp)
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
@@ -219,41 +199,11 @@ fun ChooseRoleScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("Completar registro")
+                            Text("🚀 Finalizar configuración")
                         }
                     }
                 }
             }
         }
     }
-}
-
-@Composable
-fun PasswordField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    isVisible: Boolean,
-    onVisibilityToggle: () -> Unit,
-    modifier: Modifier = Modifier,
-    isError: Boolean = false
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        singleLine = true,
-        visualTransformation = if (isVisible) VisualTransformation.None else PasswordVisualTransformation(),
-        trailingIcon = {
-            IconButton(onClick = onVisibilityToggle) {
-                Icon(
-                    imageVector = if (isVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                    contentDescription = null
-                )
-            }
-        },
-        isError = isError
-    )
 }

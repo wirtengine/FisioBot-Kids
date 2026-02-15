@@ -1,73 +1,51 @@
 package com.example.roboapp.ui.screens.login
 
+import android.app.Activity
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.roboapp.R
-import kotlinx.coroutines.launch
+import com.example.roboapp.data.model.RegisterUserType   // ✅ Importamos el enum compartido
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 
-// --------------------------------------------------------
-// ENUM COMPLETO
-// --------------------------------------------------------
-enum class RegisterUserType(val emoji: String, val displayName: String) {
-    CHILD("🧒", "Niño"),
-    THERAPIST("👨‍⚕️", "Fisioterapeuta")
-}
+// ❌ Eliminamos la definición local del enum
 
-// --------------------------------------------------------
-// COMPOSABLE PRINCIPAL
-// --------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
-    onRegister: (RegisterUserType) -> Unit,
+    onRegisterSuccess: (RegisterUserType) -> Unit,
     onBack: () -> Unit,
     viewModel: AuthViewModel = viewModel()
 ) {
-    var username by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
-    var userType by remember { mutableStateOf(RegisterUserType.CHILD) }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var confirmPasswordVisible by remember { mutableStateOf(false) }
-    var termsAccepted by remember { mutableStateOf(false) }
-
-    val focusManager = LocalFocusManager.current
+    var userType by remember { mutableStateOf(RegisterUserType.THERAPIST) }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // Observar estados del ViewModel
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
-
-    // Snackbar host para mostrar errores
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Mostrar error si existe
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -75,276 +53,198 @@ fun RegisterScreen(
         }
     }
 
-    // Validaciones
-    val isEmailValid = email.isNotEmpty() && android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
-    val isPasswordValid = password.length >= 8
-    val isConfirmPasswordValid = password == confirmPassword
-    val isFormValid = username.isNotBlank() && isEmailValid && isPasswordValid &&
-            isConfirmPasswordValid && termsAccepted
+    val webClientId = stringResource(id = R.string.default_web_client_id)
+
+    val googleSignInClient = remember(webClientId) {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(webClientId)
+            .requestEmail()
+            .build()
+        GoogleSignIn.getClient(context, gso)
+    }
+
+    val googleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                account.idToken?.let { idToken ->
+                    viewModel.firebaseAuthWithGoogle(
+                        idToken = idToken,
+                        onExistingUser = { existingRole ->
+                            viewModel._errorMessage.value = "Esta cuenta ya está registrada. Inicia sesión."
+                        },
+                        onNewUser = {
+                            onRegisterSuccess(userType)
+                        }
+                    )
+                }
+            } catch (e: ApiException) {
+                Log.e("Register", "Google sign in failed", e)
+                viewModel._errorMessage.value = "Error al iniciar sesión con Google"
+            }
+        }
+    }
+
+    val fadeIn by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(800),
+        label = ""
+    )
+
+    val cardElevation by animateDpAsState(
+        targetValue = 12.dp,
+        animationSpec = tween(600),
+        label = ""
+    )
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Crear cuenta", style = MaterialTheme.typography.titleMedium) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
-                    }
-                }
-            )
-        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
-        Column(
+    ) { padding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFFE3F2FD),
+                            Color(0xFFF8FBFF)
+                        )
+                    )
+                )
+                .padding(padding)
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.register),
-                contentDescription = "Registro RoboApp",
-                modifier = Modifier
-                    .size(150.dp)
-                    .padding(top = 16.dp, bottom = 8.dp),
-                contentScale = ContentScale.Crop
-            )
-
-            Text("Únete a RoboApp", style = MaterialTheme.typography.headlineSmall)
-            Text("Comienza tu viaje en terapia asistida")
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // CARD PRINCIPAL
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(20.dp)
+                    .alpha(fadeIn),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(cardElevation),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-
-                    // -------------------------
-                    // Selector Niño / Terapista
-                    // -------------------------
-                    Text(
-                        "¿Quién se registra?",
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp)
+                    Image(
+                        painter = painterResource(id = R.drawable.register),
+                        contentDescription = null,
+                        modifier = Modifier.size(90.dp),
+                        contentScale = ContentScale.Fit
                     )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text = "Registro Profesional",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color(0xFF1565C0)
+                    )
+
+                    Text(
+                        text = "Plataforma clínica segura",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    Text(
+                        text = "Selecciona el tipo de perfil",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color(0xFF1565C0)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            .height(52.dp)
+                            .background(
+                                color = Color(0xFFE3F2FD),
+                                shape = RoundedCornerShape(16.dp)
+                            ),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         RegisterUserType.values().forEach { type ->
                             val isSelected = userType == type
-
-                            Card(
+                            Surface(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(100.dp)
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ),
-                                shape = RoundedCornerShape(12.dp),
+                                    .fillMaxHeight(),
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (isSelected) Color.White else Color.Transparent,
                                 onClick = { userType = type }
                             ) {
-                                Column(
-                                    modifier = Modifier.fillMaxSize(),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Text(type.emoji, style = MaterialTheme.typography.headlineMedium)
-                                    Text(type.displayName)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = type.displayName,
+                                        color = if (isSelected) Color(0xFF1565C0) else Color.Gray
+                                    )
                                 }
                             }
                         }
                     }
 
-                    // -------------------------
-                    // CAMPOS DEL FORMULARIO
-                    // -------------------------
-                    FormField(
-                        value = username,
-                        onValueChange = { username = it },
-                        label = "Nombre de usuario",
-                        icon = Icons.Default.Person,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        keyboardActions = KeyboardActions(
-                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                        )
-                    )
+                    Spacer(modifier = Modifier.height(40.dp))
 
-                    FormField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = "Correo electrónico",
-                        icon = Icons.Default.Email,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        keyboardActions = KeyboardActions(
-                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                        )
-                    )
-
-                    PasswordField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = "Contraseña",
-                        isVisible = passwordVisible,
-                        onVisibilityToggle = { passwordVisible = !passwordVisible },
-                    )
-
-                    PasswordField(
-                        value = confirmPassword,
-                        onValueChange = { confirmPassword = it },
-                        label = "Confirmar contraseña",
-                        isVisible = confirmPasswordVisible,
-                        onVisibilityToggle = { confirmPasswordVisible = !confirmPasswordVisible },
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // -------------------------
-                    // TÉRMINOS Y CONDICIONES
-                    // -------------------------
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = termsAccepted,
-                            onCheckedChange = { termsAccepted = it }
-                        )
-                        Text("Acepto los términos y condiciones")
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // -------------------------
-                    // BOTÓN REGISTRAR
-                    // -------------------------
                     Button(
                         onClick = {
-                            viewModel.registerWithEmail(
-                                email = email,
-                                password = password,
-                                username = username,
-                                role = userType,
-                                onSuccess = {
-                                    onRegister(userType)
-                                }
-                            )
+                            googleLauncher.launch(googleSignInClient.signInIntent)
                         },
-                        enabled = isFormValid && !isLoading,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
                             )
                         } else {
-                            Text("Crear cuenta")
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_google),
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Registrarse con Google",
+                                color = Color.White
+                            )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // -------------------------
-                    // INFO SEGÚN USUARIO
-                    // -------------------------
-                    Text(
-                        text = when (userType) {
-                            RegisterUserType.CHILD -> "Registro para niños"
-                            RegisterUserType.THERAPIST -> "Registro para terapeutas"
-                        },
-                        textAlign = TextAlign.Center
-                    )
+                    Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
                         text = when (userType) {
-                            RegisterUserType.CHILD -> "Los padres deben completar este formulario"
-                            RegisterUserType.THERAPIST -> "Se requiere verificación profesional"
+                            RegisterUserType.CHILD ->
+                                "El registro debe ser realizado por el tutor legal."
+                            RegisterUserType.THERAPIST ->
+                                "Se realizará verificación profesional antes de activar el perfil."
                         },
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
                     )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    TextButton(onClick = onBack) {
+                        Text("¿Ya tienes cuenta? Iniciar sesión")
+                    }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Row {
-                Text("¿Ya tienes cuenta?")
-                TextButton(onClick = onBack) { Text("Iniciar sesión") }
             }
         }
     }
-}
-
-// --------------------------------------------------------
-// FORM FIELD
-// --------------------------------------------------------
-@Composable
-fun FormField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    icon: ImageVector,
-    keyboardOptions: KeyboardOptions,
-    keyboardActions: KeyboardActions
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        leadingIcon = { Icon(icon, contentDescription = null) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 16.dp),
-        keyboardOptions = keyboardOptions,
-        keyboardActions = keyboardActions
-    )
-}
-
-// --------------------------------------------------------
-// PASSWORD FIELD
-// --------------------------------------------------------
-@Composable
-fun PasswordField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    isVisible: Boolean,
-    onVisibilityToggle: () -> Unit
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-        trailingIcon = {
-            IconButton(onClick = onVisibilityToggle) {
-                Icon(
-                    imageVector = if (isVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                    contentDescription = null
-                )
-            }
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 16.dp),
-        visualTransformation = if (isVisible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
-    )
 }

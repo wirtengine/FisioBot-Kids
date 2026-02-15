@@ -6,7 +6,7 @@ data class RoboUser(
     val uid: String = "",
     val email: String = "",
     val username: String = "",
-    val age: Int? = null,          // Edad opcional
+    val age: Int = 0,          // ✅ Ahora obligatoria
     val role: String = "child",
     val code: String = "",
     val createdAt: Timestamp = Timestamp.now()

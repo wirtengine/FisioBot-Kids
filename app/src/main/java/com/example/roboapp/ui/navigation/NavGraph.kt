@@ -6,16 +6,17 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.roboapp.ui.screens.login.ChooseRoleScreen
 import com.example.roboapp.ui.screens.login.LoginScreen
 import com.example.roboapp.ui.screens.login.RegisterScreen
-import com.example.roboapp.ui.screens.login.RegisterUserType
+import com.example.roboapp.data.model.RegisterUserType   // ✅ Importación correcta
 import com.example.roboapp.ui.screens.login.AuthViewModel
+import com.example.roboapp.ui.screens.login.ChooseRoleScreen
 import com.example.roboapp.ui.screens.login.child.ChildModeScreen
 import com.example.roboapp.ui.screens.login.therapist.TherapistScreen
 
 @Composable
 fun AppNavGraph() {
+
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = viewModel()
 
@@ -23,7 +24,12 @@ fun AppNavGraph() {
         navController = navController,
         startDestination = "login"
     ) {
+
+        // ----------------------------
+        // LOGIN
+        // ----------------------------
         composable("login") {
+
             LoginScreen(
                 onLoginChild = {
                     navController.navigate("child_home") {
@@ -38,24 +44,31 @@ fun AppNavGraph() {
                 onRegister = {
                     navController.navigate("register")
                 },
-                onForgotPassword = { /* manejar recuperación */ },
                 onFirstTimeGoogle = {
-                    Log.d("GoogleFlow", "Navegando a choose_role")
+                    Log.d("GoogleFlow", "Usuario nuevo → choose_role")
                     navController.navigate("choose_role")
                 },
                 viewModel = authViewModel
             )
         }
 
+        // ----------------------------
+        // REGISTER
+        // ----------------------------
         composable("register") {
+
             RegisterScreen(
-                onRegister = { userType ->
+                onRegisterSuccess = { userType ->
                     when (userType) {
-                        RegisterUserType.CHILD -> navController.navigate("child_home") {
-                            popUpTo("login") { inclusive = true }
+                        RegisterUserType.CHILD -> {
+                            navController.navigate("child_home") {
+                                popUpTo("login") { inclusive = true }
+                            }
                         }
-                        RegisterUserType.THERAPIST -> navController.navigate("therapist_home") {
-                            popUpTo("login") { inclusive = true }
+                        RegisterUserType.THERAPIST -> {
+                            navController.navigate("therapist_home") {
+                                popUpTo("login") { inclusive = true }
+                            }
                         }
                     }
                 },
@@ -66,21 +79,28 @@ fun AppNavGraph() {
             )
         }
 
+        // ----------------------------
+        // CHOOSE ROLE (Primera vez Google)
+        // ----------------------------
         composable("choose_role") {
+
             ChooseRoleScreen(
-                onRoleSelected = { role, username, age, password ->
-                    authViewModel.saveGoogleUserWithPassword(
+                onRoleSelected = { role, username, age ->
+                    authViewModel.saveGoogleUser(
                         role = role,
                         username = username,
                         age = age,
-                        password = password,
                         onSuccess = {
                             when (role) {
-                                RegisterUserType.CHILD -> navController.navigate("child_home") {
-                                    popUpTo("login") { inclusive = true }
+                                RegisterUserType.CHILD -> {
+                                    navController.navigate("child_home") {
+                                        popUpTo("login") { inclusive = true }
+                                    }
                                 }
-                                RegisterUserType.THERAPIST -> navController.navigate("therapist_home") {
-                                    popUpTo("login") { inclusive = true }
+                                RegisterUserType.THERAPIST -> {
+                                    navController.navigate("therapist_home") {
+                                        popUpTo("login") { inclusive = true }
+                                    }
                                 }
                             }
                         }
@@ -93,10 +113,16 @@ fun AppNavGraph() {
             )
         }
 
+        // ----------------------------
+        // CHILD HOME
+        // ----------------------------
         composable("child_home") {
             ChildModeScreen()
         }
 
+        // ----------------------------
+        // THERAPIST HOME
+        // ----------------------------
         composable("therapist_home") {
             TherapistScreen()
         }
