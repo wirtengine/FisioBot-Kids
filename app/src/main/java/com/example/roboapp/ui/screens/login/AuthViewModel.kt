@@ -3,7 +3,8 @@ package com.example.roboapp.ui.screens.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.roboapp.data.model.RoboUser
-import com.example.roboapp.data.model.RegisterUserType   // ✅ Importación del enum compartido
+import com.example.roboapp.data.model.RegisterUserType
+import com.example.roboapp.data.model.UserStats  // Asegúrate de importar
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
@@ -26,18 +27,23 @@ class AuthViewModel : ViewModel() {
     val errorMessage: StateFlow<String?> = _errorMessage
 
     // ------------------------------------------------
-    // LOGIN EMAIL/PASSWORD
+    // LOGIN EMAIL/PASSWORD (ahora devuelve rol y uid)
     // ------------------------------------------------
     fun loginWithEmail(
         email: String,
         password: String,
-        onSuccess: () -> Unit
+        onSuccess: (RegisterUserType, String) -> Unit
     ) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                auth.signInWithEmailAndPassword(email, password).await()
-                onSuccess()
+                val result = auth.signInWithEmailAndPassword(email, password).await()
+                val uid = result.user?.uid ?: throw Exception("Usuario sin UID")
+                // Obtener el rol del usuario desde Firestore
+                val doc = db.collection("users").document(uid).get().await()
+                val roleString = doc.getString("role") ?: "child"
+                val role = RegisterUserType.valueOf(roleString.uppercase())
+                onSuccess(role, uid)
             } catch (e: Exception) {
                 _errorMessage.value = e.message
             } finally {
@@ -47,7 +53,7 @@ class AuthViewModel : ViewModel() {
     }
 
     // ------------------------------------------------
-    // REGISTER EMAIL/PASSWORD
+    // REGISTER EMAIL/PASSWORD (incluye uid y crea estadísticas)
     // ------------------------------------------------
     fun registerWithEmail(
         email: String,
@@ -55,7 +61,7 @@ class AuthViewModel : ViewModel() {
         username: String,
         age: Int,
         role: RegisterUserType,
-        onSuccess: () -> Unit
+        onSuccess: (String) -> Unit  // Solo uid, el rol ya se conoce
     ) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -74,12 +80,18 @@ class AuthViewModel : ViewModel() {
                     createdAt = Timestamp.now()
                 )
 
-                db.collection("users")
-                    .document(uid)
-                    .set(roboUser)
-                    .await()
+                db.collection("users").document(uid).set(roboUser).await()
 
-                onSuccess()
+                // Crear estadísticas iniciales si es niño
+                if (role == RegisterUserType.CHILD) {
+                    val initialStats = UserStats()
+                    db.collection("users").document(uid)
+                        .collection("stats").document("current")
+                        .set(initialStats)
+                        .await()
+                }
+
+                onSuccess(uid)
             } catch (e: Exception) {
                 _errorMessage.value = e.message
             } finally {
@@ -89,11 +101,11 @@ class AuthViewModel : ViewModel() {
     }
 
     // ------------------------------------------------
-    // LOGIN CON GOOGLE
+    // LOGIN CON GOOGLE (ahora pasa rol y uid en onExistingUser)
     // ------------------------------------------------
     fun firebaseAuthWithGoogle(
         idToken: String,
-        onExistingUser: (RegisterUserType) -> Unit,
+        onExistingUser: (RegisterUserType, String) -> Unit,
         onNewUser: () -> Unit
     ) {
         viewModelScope.launch {
@@ -103,15 +115,12 @@ class AuthViewModel : ViewModel() {
                 val result = auth.signInWithCredential(credential).await()
                 val user = result.user ?: return@launch
 
-                val doc = db.collection("users")
-                    .document(user.uid)
-                    .get()
-                    .await()
+                val doc = db.collection("users").document(user.uid).get().await()
 
                 if (doc.exists()) {
                     val roleString = doc.getString("role") ?: "child"
                     val role = RegisterUserType.valueOf(roleString.uppercase())
-                    onExistingUser(role)
+                    onExistingUser(role, user.uid)
                 } else {
                     onNewUser()
                 }
@@ -124,13 +133,13 @@ class AuthViewModel : ViewModel() {
     }
 
     // ------------------------------------------------
-    // GUARDAR USUARIO GOOGLE (PRIMERA VEZ)
+    // GUARDAR USUARIO GOOGLE (PRIMERA VEZ) - incluye uid en callback
     // ------------------------------------------------
     fun saveGoogleUser(
         role: RegisterUserType,
         username: String,
         age: Int,
-        onSuccess: () -> Unit
+        onSuccess: (String) -> Unit
     ) {
         val user = auth.currentUser ?: return
         viewModelScope.launch {
@@ -147,12 +156,18 @@ class AuthViewModel : ViewModel() {
                     createdAt = Timestamp.now()
                 )
 
-                db.collection("users")
-                    .document(user.uid)
-                    .set(roboUser)
-                    .await()
+                db.collection("users").document(user.uid).set(roboUser).await()
 
-                onSuccess()
+                // Crear estadísticas para niño
+                if (role == RegisterUserType.CHILD) {
+                    val initialStats = UserStats()
+                    db.collection("users").document(user.uid)
+                        .collection("stats").document("current")
+                        .set(initialStats)
+                        .await()
+                }
+
+                onSuccess(user.uid)
             } catch (e: Exception) {
                 _errorMessage.value = e.message
             } finally {

@@ -27,7 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.roboapp.R
-import com.example.roboapp.data.model.RegisterUserType   // ✅ Único enum
+import com.example.roboapp.data.model.RegisterUserType
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
@@ -41,8 +41,7 @@ enum class UserType(val displayName: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
-    onLoginChild: () -> Unit,
-    onLoginTherapist: () -> Unit,
+    onLoginSuccess: (RegisterUserType, String) -> Unit, // Nuevo callback unificado
     onRegister: () -> Unit,
     onFirstTimeGoogle: () -> Unit,
     viewModel: AuthViewModel = viewModel()
@@ -84,14 +83,12 @@ fun LoginScreen(
                 account.idToken?.let { idToken ->
                     viewModel.firebaseAuthWithGoogle(
                         idToken = idToken,
-                        onExistingUser = { role ->
-                            // role es de tipo RegisterUserType (del paquete data.model)
-                            when (role) {
-                                RegisterUserType.CHILD -> onLoginChild()
-                                RegisterUserType.THERAPIST -> onLoginTherapist()
-                            }
+                        onExistingUser = { role, uid ->
+                            // Usuario existente: navegar según rol con el UID
+                            onLoginSuccess(role, uid)
                         },
                         onNewUser = {
+                            // Usuario nuevo: ir a elegir rol
                             onFirstTimeGoogle()
                         }
                     )

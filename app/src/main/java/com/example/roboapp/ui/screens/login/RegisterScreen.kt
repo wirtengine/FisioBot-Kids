@@ -26,17 +26,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.roboapp.R
-import com.example.roboapp.data.model.RegisterUserType   // ✅ Importamos el enum compartido
+import com.example.roboapp.data.model.RegisterUserType
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 
-// ❌ Eliminamos la definición local del enum
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
-    onRegisterSuccess: (RegisterUserType) -> Unit,
+    onRegisterSuccess: (RegisterUserType) -> Unit, // Ahora navega a choose_role con el rol
     onBack: () -> Unit,
     viewModel: AuthViewModel = viewModel()
 ) {
@@ -73,10 +71,12 @@ fun RegisterScreen(
                 account.idToken?.let { idToken ->
                     viewModel.firebaseAuthWithGoogle(
                         idToken = idToken,
-                        onExistingUser = { existingRole ->
+                        onExistingUser = { role, uid ->
+                            // Usuario existente, debería ir a login pero mostramos error
                             viewModel._errorMessage.value = "Esta cuenta ya está registrada. Inicia sesión."
                         },
                         onNewUser = {
+                            // Usuario nuevo, vamos a elegir rol, pasando el rol seleccionado
                             onRegisterSuccess(userType)
                         }
                     )

@@ -24,15 +24,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.roboapp.R
+import com.example.roboapp.data.repository.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
+// Ahora ChildModeScreen recibe el userId como parámetro
 @Composable
-fun ChildModeScreen() {
-    ChildModeRootScreen()
+fun ChildModeScreen(userId: String) {
+    ChildModeRootScreen(userId = userId)
 }
 
 /* ------------------------------------------------ */
@@ -41,12 +43,16 @@ fun ChildModeScreen() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChildModeRootScreen() {
+fun ChildModeRootScreen(userId: String) {
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
     var selectedScreen by remember { mutableStateOf(0) }
+
+    // Crear el ViewModel
+    val repository = UserRepository() // En un proyecto real usarías inyección de dependencias
+    val viewModel = remember { ChildViewModel(repository, userId) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -105,7 +111,8 @@ fun ChildModeRootScreen() {
     ) {
         ChildMainScaffold(
             drawerState = drawerState,
-            selectedScreen = selectedScreen
+            selectedScreen = selectedScreen,
+            viewModel = viewModel // Pasamos el ViewModel
         )
     }
 }
@@ -116,7 +123,11 @@ fun ChildModeRootScreen() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChildMainScaffold(drawerState: DrawerState, selectedScreen: Int) {
+fun ChildMainScaffold(
+    drawerState: DrawerState,
+    selectedScreen: Int,
+    viewModel: ChildViewModel // Nuevo parámetro
+) {
 
     val scope = rememberCoroutineScope()
 
@@ -147,7 +158,7 @@ fun ChildMainScaffold(drawerState: DrawerState, selectedScreen: Int) {
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (selectedScreen) {
-                0 -> ChildHomeScreen()
+                0 -> ChildHomeScreen(viewModel = viewModel) // Pasamos el ViewModel
                 1 -> ChildExercisesScreen()
                 2 -> ControlRobotScreen()
                 3 -> AboutProjectScreen()
@@ -161,7 +172,10 @@ fun ChildMainScaffold(drawerState: DrawerState, selectedScreen: Int) {
 /* ------------------------------------------------ */
 
 @Composable
-fun ChildHomeScreen() {
+fun ChildHomeScreen(viewModel: ChildViewModel) {
+    val user by viewModel.user.collectAsState()
+    val stats by viewModel.stats.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
     val infiniteTransition = rememberInfiniteTransition()
 
@@ -180,6 +194,12 @@ fun ChildHomeScreen() {
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+
+        // Mostrar información del usuario si está disponible
+        user?.let {
+            UserInfoHeader(name = it.username, code = it.code)
+            Spacer(Modifier.height(16.dp))
+        }
 
         Box(
             modifier = Modifier
@@ -208,28 +228,58 @@ fun ChildHomeScreen() {
 
         Spacer(Modifier.height(30.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (isLoading) {
+            CircularProgressIndicator()
+        } else {
+            stats?.let {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    DashboardCard(
+                        title = "Progreso General",
+                        value = "${it.overallProgress}%",
+                        color = Color(0xFF4F90FF),
+                        icon = Icons.Default.BarChart
+                    )
+                    DashboardCard(
+                        title = "Puntaje Total",
+                        value = "${it.totalScore} ⭐",
+                        color = Color(0xFFFFC400),
+                        icon = Icons.Default.Star
+                    )
+                    DashboardCard(
+                        title = "Ejercicios Completados",
+                        value = it.exercisesCompleted.toString(),
+                        color = Color(0xFF73C98D),
+                        icon = Icons.Default.FitnessCenter
+                    )
+                }
+            } ?: Text("No hay estadísticas disponibles")
+        }
+    }
+}
 
-            DashboardCard(
-                title = "Progreso General",
-                value = "72%",
-                color = Color(0xFF4F90FF),
-                icon = Icons.Default.BarChart
+// Nuevo componente para mostrar info del usuario
+@Composable
+fun UserInfoHeader(name: String, code: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Person,
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+                tint = Color(0xFF1976D2)
             )
-
-            DashboardCard(
-                title = "Puntaje Total",
-                value = "350 ⭐",
-                color = Color(0xFFFFC400),
-                icon = Icons.Default.Star
-            )
-
-            DashboardCard(
-                title = "Ejercicios Completados",
-                value = "15",
-                color = Color(0xFF73C98D),
-                icon = Icons.Default.FitnessCenter
-            )
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text("Hola, $name", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("Código único: $code", color = Color.Gray, fontSize = 14.sp)
+            }
         }
     }
 }

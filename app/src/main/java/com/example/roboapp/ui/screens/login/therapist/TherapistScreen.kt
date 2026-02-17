@@ -26,11 +26,11 @@ import com.example.roboapp.R
 import kotlinx.coroutines.launch
 
 // -------------------------------------------------
-// ENTRY POINT
+// ENTRY POINT - AHORA RECIBE userId
 // -------------------------------------------------
 @Composable
-fun TherapistScreen() {
-    TherapistRootScreen()
+fun TherapistScreen(userId: String) {
+    TherapistRootScreen(userId = userId)
 }
 
 // -------------------------------------------------
@@ -38,7 +38,7 @@ fun TherapistScreen() {
 // -------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TherapistRootScreen() {
+fun TherapistRootScreen(userId: String) {   // <-- userId añadido
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var selectedScreen by remember { mutableStateOf(0) }
@@ -116,7 +116,8 @@ fun TherapistRootScreen() {
     ) {
         TherapistMainScaffold(
             drawerState = drawerState,
-            selectedScreen = selectedScreen
+            selectedScreen = selectedScreen,
+            userId = userId   // <-- pasamos userId hacia abajo
         )
     }
 }
@@ -147,7 +148,11 @@ fun DrawerItem(
 // -------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TherapistMainScaffold(drawerState: DrawerState, selectedScreen: Int) {
+fun TherapistMainScaffold(
+    drawerState: DrawerState,
+    selectedScreen: Int,
+    userId: String   // <-- nuevo parámetro
+) {
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -179,22 +184,23 @@ fun TherapistMainScaffold(drawerState: DrawerState, selectedScreen: Int) {
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
             when (selectedScreen) {
-                0 -> TherapistHomeScreen()
-                1 -> TherapistPatientsScreen()
-                2 -> TherapistExercisesScreen()
-                3 -> TherapistControlRobotScreen()
-                4 -> TherapistReportsScreen()
-                5 -> TherapistAboutProjectScreen()
+                0 -> TherapistHomeScreen(userId = userId)               // <-- pasamos userId
+                1 -> TherapistPatientsScreen(userId = userId)           // <-- (futuro)
+                2 -> TherapistExercisesScreen(userId = userId)          // <-- (futuro)
+                3 -> TherapistControlRobotScreen(userId = userId)       // <-- (futuro)
+                4 -> TherapistReportsScreen(userId = userId)            // <-- (futuro)
+                5 -> TherapistAboutProjectScreen(userId = userId)       // <-- (futuro)
             }
         }
     }
 }
 
 // -------------------------------------------------
-// HOME SCREEN (DASHBOARD)
+// HOME SCREEN (DASHBOARD) - AHORA RECIBE userId
 // -------------------------------------------------
 @Composable
-fun TherapistHomeScreen() {
+fun TherapistHomeScreen(userId: String) {   // <-- userId añadido
+    // Por ahora no se usa, pero en el futuro se podría cargar información específica del terapeuta
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -202,7 +208,7 @@ fun TherapistHomeScreen() {
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Cabecera con avatar y mensaje
+        // Cabecera con avatar y mensaje (podríamos mostrar el nombre real del terapeuta)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
@@ -225,7 +231,7 @@ fun TherapistHomeScreen() {
             Spacer(modifier = Modifier.width(16.dp))
             Column {
                 Text(
-                    "Bienvenido, Dr. Martínez",
+                    "Bienvenido, Dr. Martínez",   // En el futuro, esto podría ser el nombre real
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0066A1)
@@ -240,7 +246,7 @@ fun TherapistHomeScreen() {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Tarjetas de resumen
+        // Tarjetas de resumen (simuladas, podrían ser reales más adelante)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
@@ -376,10 +382,10 @@ fun SessionItem(name: String, time: String, exercise: String) {
 }
 
 // -------------------------------------------------
-// PATIENTS SCREEN
+// PATIENTS SCREEN (futuro)
 // -------------------------------------------------
 @Composable
-fun TherapistPatientsScreen() {
+fun TherapistPatientsScreen(userId: String) {   // <-- añadido userId
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -489,10 +495,10 @@ fun PatientCard(patient: Patient) {
 }
 
 // -------------------------------------------------
-// EXERCISES SCREEN (LIBRARY + ASSIGN)
+// EXERCISES SCREEN (futuro)
 // -------------------------------------------------
 @Composable
-fun TherapistExercisesScreen() {
+fun TherapistExercisesScreen(userId: String) {   // <-- añadido userId
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -564,7 +570,6 @@ fun ExerciseLibraryCard(exercise: Exercise) {
                 Text(exercise.description, fontSize = 14.sp, color = Color.Gray)
                 Spacer(modifier = Modifier.height(4.dp))
                 Row {
-                    // ✅ CORREGIDO: Usar AssistChip en lugar de Chip
                     AssistChip(
                         onClick = { /* Acción opcional: quizás filtrar? */ },
                         label = { Text(exercise.duration) },
@@ -575,7 +580,6 @@ fun ExerciseLibraryCard(exercise: Exercise) {
                         border = null
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    // ✅ CORREGIDO: AssistChip con color según dificultad
                     AssistChip(
                         onClick = { /* Acción opcional */ },
                         label = { Text(exercise.difficulty) },
@@ -599,10 +603,10 @@ fun ExerciseLibraryCard(exercise: Exercise) {
 }
 
 // -------------------------------------------------
-// ROBOT CONTROL SCREEN (ADVANCED)
+// ROBOT CONTROL SCREEN (futuro)
 // -------------------------------------------------
 @Composable
-fun TherapistControlRobotScreen() {
+fun TherapistControlRobotScreen(userId: String) {   // <-- añadido userId
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -748,10 +752,10 @@ fun ControlButtonAdv(icon: ImageVector, text: String, color: Color) {
 }
 
 // -------------------------------------------------
-// REPORTS SCREEN (PROGRESS CHARTS)
+// REPORTS SCREEN (futuro)
 // -------------------------------------------------
 @Composable
-fun TherapistReportsScreen() {
+fun TherapistReportsScreen(userId: String) {   // <-- añadido userId
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -881,10 +885,10 @@ fun BarChartItem(label: String, value: Int, max: Int) {
 }
 
 // -------------------------------------------------
-// ABOUT PROJECT SCREEN
+// ABOUT PROJECT SCREEN (futuro)
 // -------------------------------------------------
 @Composable
-fun TherapistAboutProjectScreen() {
+fun TherapistAboutProjectScreen(userId: String) {   // <-- añadido userId
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -931,7 +935,6 @@ fun TherapistAboutProjectScreen() {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
         ) {
-            // ✅ CORREGIDO: AssistChip para la versión
             AssistChip(
                 onClick = { /* Acción informativa */ },
                 label = { Text("Versión 1.0.0") },

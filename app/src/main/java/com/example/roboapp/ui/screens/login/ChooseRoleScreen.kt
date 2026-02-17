@@ -15,19 +15,18 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.roboapp.data.model.RegisterUserType   // ✅ Importamos el enum compartido
+import com.example.roboapp.data.model.RegisterUserType
 import com.google.firebase.auth.FirebaseAuth
-
-// ❌ Eliminamos la definición local del enum
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChooseRoleScreen(
-    onRoleSelected: (RegisterUserType, String, Int) -> Unit,
+    preselectedRole: RegisterUserType? = null, // Rol preseleccionado desde RegisterScreen
+    onRoleSelected: (RegisterUserType, String) -> Unit, // Ahora recibe el uid después de guardar
     onBack: () -> Unit,
     viewModel: AuthViewModel = viewModel()
 ) {
-    var selectedRole by remember { mutableStateOf(RegisterUserType.CHILD) }
+    var selectedRole by remember { mutableStateOf(preselectedRole ?: RegisterUserType.CHILD) }
     var username by remember { mutableStateOf("") }
     var age by remember { mutableStateOf("") }
 
@@ -38,7 +37,6 @@ fun ChooseRoleScreen(
     val currentUser = FirebaseAuth.getInstance().currentUser
     val email = currentUser?.email ?: "correo@no.disponible"
 
-    // Mostrar errores del ViewModel
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -46,7 +44,6 @@ fun ChooseRoleScreen(
         }
     }
 
-    // Validación del formulario
     val ageInt = age.toIntOrNull()
     val isFormValid = username.isNotBlank() && ageInt != null
 
@@ -83,7 +80,6 @@ fun ChooseRoleScreen(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Correo electrónico (solo lectura)
                     OutlinedTextField(
                         value = email,
                         onValueChange = {},
@@ -103,7 +99,6 @@ fun ChooseRoleScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Selector de rol con animación
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -155,7 +150,6 @@ fun ChooseRoleScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Nombre completo
                     OutlinedTextField(
                         value = username,
                         onValueChange = { username = it },
@@ -167,7 +161,6 @@ fun ChooseRoleScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Edad (solo números)
                     OutlinedTextField(
                         value = age,
                         onValueChange = { newValue ->
@@ -182,11 +175,17 @@ fun ChooseRoleScreen(
 
                     Spacer(modifier = Modifier.height(28.dp))
 
-                    // Botón finalizar
                     Button(
                         onClick = {
                             ageInt?.let { validAge ->
-                                onRoleSelected(selectedRole, username, validAge)
+                                viewModel.saveGoogleUser(
+                                    role = selectedRole,
+                                    username = username,
+                                    age = validAge,
+                                    onSuccess = { uid ->
+                                        onRoleSelected(selectedRole, uid)
+                                    }
+                                )
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
