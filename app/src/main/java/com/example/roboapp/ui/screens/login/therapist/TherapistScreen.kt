@@ -4,6 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import com.example.roboapp.ui.screens.login.therapist.TherapistViewModel
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,10 +25,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.roboapp.R
+import com.example.roboapp.data.model.RoboUser
+import com.example.roboapp.data.repository.UserRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
+
 
 // -------------------------------------------------
-// ENTRY POINT - AHORA RECIBE userId
+// ENTRY POINT
 // -------------------------------------------------
 @Composable
 fun TherapistScreen(userId: String) {
@@ -34,14 +43,18 @@ fun TherapistScreen(userId: String) {
 }
 
 // -------------------------------------------------
-// ROOT SCREEN (MODAL NAVIGATION DRAWER)
+// ROOT SCREEN
 // -------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TherapistRootScreen(userId: String) {   // <-- userId añadido
+fun TherapistRootScreen(userId: String) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var selectedScreen by remember { mutableStateOf(0) }
+
+    // Crear ViewModel
+    val repository = UserRepository()
+    val viewModel = remember { TherapistViewModel(repository, userId) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -117,7 +130,7 @@ fun TherapistRootScreen(userId: String) {   // <-- userId añadido
         TherapistMainScaffold(
             drawerState = drawerState,
             selectedScreen = selectedScreen,
-            userId = userId   // <-- pasamos userId hacia abajo
+            viewModel = viewModel
         )
     }
 }
@@ -144,14 +157,14 @@ fun DrawerItem(
 }
 
 // -------------------------------------------------
-// MAIN SCAFFOLD (TOPBAR + CONTENT)
+// MAIN SCAFFOLD
 // -------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TherapistMainScaffold(
     drawerState: DrawerState,
     selectedScreen: Int,
-    userId: String   // <-- nuevo parámetro
+    viewModel: TherapistViewModel
 ) {
     val scope = rememberCoroutineScope()
 
@@ -184,23 +197,26 @@ fun TherapistMainScaffold(
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
             when (selectedScreen) {
-                0 -> TherapistHomeScreen(userId = userId)               // <-- pasamos userId
-                1 -> TherapistPatientsScreen(userId = userId)           // <-- (futuro)
-                2 -> TherapistExercisesScreen(userId = userId)          // <-- (futuro)
-                3 -> TherapistControlRobotScreen(userId = userId)       // <-- (futuro)
-                4 -> TherapistReportsScreen(userId = userId)            // <-- (futuro)
-                5 -> TherapistAboutProjectScreen(userId = userId)       // <-- (futuro)
+                0 -> TherapistHomeScreen(viewModel = viewModel)
+                1 -> TherapistPatientsScreen(viewModel = viewModel)
+                2 -> TherapistExercisesScreen() // Mantenemos ejercicios simulados por ahora
+                3 -> TherapistControlRobotScreen() // Control funcional
+                4 -> TherapistReportsScreen() // Informes simulados
+                5 -> TherapistAboutProjectScreen() // About simulado
             }
         }
     }
 }
 
 // -------------------------------------------------
-// HOME SCREEN (DASHBOARD) - AHORA RECIBE userId
+// HOME SCREEN (DATOS REALES)
 // -------------------------------------------------
 @Composable
-fun TherapistHomeScreen(userId: String) {   // <-- userId añadido
-    // Por ahora no se usa, pero en el futuro se podría cargar información específica del terapeuta
+fun TherapistHomeScreen(viewModel: TherapistViewModel) {
+    val therapist by viewModel.therapist.collectAsState()
+    val patients by viewModel.patients.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -208,64 +224,36 @@ fun TherapistHomeScreen(userId: String) {   // <-- userId añadido
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Cabecera con avatar y mensaje (podríamos mostrar el nombre real del terapeuta)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(70.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFE1F5FE))
-                    .border(2.dp, Color(0xFF0066A1), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = "Terapeuta",
-                    tint = Color(0xFF0066A1),
-                    modifier = Modifier.size(40.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(
-                    "Bienvenido, Dr. Martínez",   // En el futuro, esto podría ser el nombre real
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0066A1)
-                )
-                Text(
-                    "Clínica de Rehabilitación Infantil",
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
-            }
+        if (isLoading) {
+            CircularProgressIndicator()
+        } else {
+            therapist?.let {
+                TherapistInfoHeader(name = it.username, code = it.code)
+            } ?: Text("Error al cargar datos del terapeuta")
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Tarjetas de resumen (simuladas, podrían ser reales más adelante)
+        // Tarjetas de resumen con datos reales (pacientes)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             SummaryCard(
                 title = "Pacientes",
-                value = "12",
+                value = patients.size.toString(),
                 icon = Icons.Default.People,
                 color = Color(0xFF4CAF50)
             )
             SummaryCard(
                 title = "Sesiones hoy",
-                value = "8",
+                value = "0", // Placeholder, puedes implementar después
                 icon = Icons.Default.Today,
                 color = Color(0xFF2196F3)
             )
             SummaryCard(
                 title = "Progreso ⌀",
-                value = "74%",
+                value = "0%", // Placeholder
                 icon = Icons.Default.TrendingUp,
                 color = Color(0xFFFF9800)
             )
@@ -273,7 +261,7 @@ fun TherapistHomeScreen(userId: String) {   // <-- userId añadido
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Próximas sesiones
+        // Lista de pacientes recientes (primeros 3)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -282,23 +270,26 @@ fun TherapistHomeScreen(userId: String) {   // <-- userId añadido
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    "Próximas sesiones",
+                    "Pacientes recientes",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0066A1)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                SessionItem("Ana López", "09:30 AM", "Ejercicios de marcha")
-                Divider(modifier = Modifier.padding(vertical = 8.dp))
-                SessionItem("Carlos Ruiz", "11:00 AM", "Alcance de objetos")
-                Divider(modifier = Modifier.padding(vertical = 8.dp))
-                SessionItem("Sofía Méndez", "02:15 PM", "Coordinación motora")
+                if (patients.isEmpty()) {
+                    Text("No hay pacientes asignados", color = Color.Gray)
+                } else {
+                    patients.take(3).forEach { patient ->
+                        PatientSimpleItem(patient)
+                        if (patient != patients.lastOrNull()) Divider()
+                    }
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Alertas / tareas pendientes
+        // Alerta (puede ser real después)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -310,18 +301,44 @@ fun TherapistHomeScreen(userId: String) {   // <-- userId añadido
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Default.Warning,
-                    contentDescription = "Alerta",
+                    Icons.Default.Info,
+                    contentDescription = "Info",
                     tint = Color(0xFFFF9800),
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    "3 pacientes requieren reevaluación esta semana",
+                    "Recuerda actualizar los perfiles de tus pacientes regularmente.",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFF5D4037)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun TherapistInfoHeader(name: String, code: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE1F5FE))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Person,
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+                tint = Color(0xFF0066A1)
+            )
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text("Dr. $name", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("Código único: $code", color = Color.Gray, fontSize = 14.sp)
             }
         }
     }
@@ -368,65 +385,75 @@ fun SummaryCard(title: String, value: String, icon: ImageVector, color: Color) {
 }
 
 @Composable
-fun SessionItem(name: String, time: String, exercise: String) {
+fun PatientSimpleItem(patient: RoboUser) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Text(exercise, fontSize = 14.sp, color = Color.Gray)
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFE1F5FE)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                patient.username.take(1),
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0066A1)
+            )
         }
-        Text(time, fontSize = 14.sp, color = Color(0xFF0066A1), fontWeight = FontWeight.Medium)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(patient.username, fontWeight = FontWeight.Medium)
+            Text("Edad: ${patient.age}", fontSize = 12.sp, color = Color.Gray)
+        }
     }
 }
 
 // -------------------------------------------------
-// PATIENTS SCREEN (futuro)
+// PATIENTS SCREEN (LISTA REAL DE PACIENTES)
 // -------------------------------------------------
 @Composable
-fun TherapistPatientsScreen(userId: String) {   // <-- añadido userId
+fun TherapistPatientsScreen(viewModel: TherapistViewModel) {
+    val patients by viewModel.patients.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(20.dp)
     ) {
         Text(
-            "Listado de Pacientes",
+            "Mis Pacientes",
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF0066A1)
         )
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Lista de pacientes (simulada)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(patientList) { patient ->
-                PatientCard(patient)
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (patients.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No tienes pacientes asignados")
+            }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(patients) { patient ->
+                    PatientDetailCard(patient)
+                }
             }
         }
     }
 }
 
-data class Patient(
-    val id: Int,
-    val name: String,
-    val age: Int,
-    val lastSession: String,
-    val progress: Int,
-    val avatarRes: Int? = null
-)
-
-val patientList = listOf(
-    Patient(1, "Ana López", 7, "Ayer", 75),
-    Patient(2, "Carlos Ruiz", 5, "Hace 2 días", 60),
-    Patient(3, "Sofía Méndez", 8, "Hoy", 82),
-    Patient(4, "Mateo Gómez", 4, "Lunes", 45),
-    Patient(5, "Valentina Torres", 6, "Viernes", 90)
-)
-
 @Composable
-fun PatientCard(patient: Patient) {
+fun PatientDetailCard(patient: RoboUser) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -439,7 +466,7 @@ fun PatientCard(patient: Patient) {
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar
+            // Avatar con inicial
             Box(
                 modifier = Modifier
                     .size(56.dp)
@@ -449,7 +476,7 @@ fun PatientCard(patient: Patient) {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    patient.name.take(1),
+                    patient.username.take(1),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0066A1)
@@ -460,45 +487,27 @@ fun PatientCard(patient: Patient) {
 
             // Info
             Column(modifier = Modifier.weight(1f)) {
-                Text(patient.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(patient.username, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Text(
-                    "${patient.age} años · Última sesión: ${patient.lastSession}",
+                    "Edad: ${patient.age} · Código: ${patient.code}",
                     fontSize = 14.sp,
                     color = Color.Gray
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                // Barra de progreso
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Progreso:", fontSize = 12.sp, color = Color.Gray)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFFE0E0E0))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(patient.progress / 100f)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF4CAF50))
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("${patient.progress}%", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+                // Puedes agregar más info como último progreso si lo tienes
+            }
+
+            IconButton(onClick = { /* Ver detalle */ }) {
+                Icon(Icons.Default.ArrowForward, contentDescription = "Ver", tint = Color(0xFF0066A1))
             }
         }
     }
 }
 
 // -------------------------------------------------
-// EXERCISES SCREEN (futuro)
+// EXERCISES SCREEN (SIMULADA, IGUAL QUE ANTES)
 // -------------------------------------------------
 @Composable
-fun TherapistExercisesScreen(userId: String) {   // <-- añadido userId
+fun TherapistExercisesScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -571,7 +580,7 @@ fun ExerciseLibraryCard(exercise: Exercise) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Row {
                     AssistChip(
-                        onClick = { /* Acción opcional: quizás filtrar? */ },
+                        onClick = { /* Acción opcional */ },
                         label = { Text(exercise.duration) },
                         modifier = Modifier.height(24.dp),
                         colors = AssistChipDefaults.assistChipColors(
@@ -603,159 +612,441 @@ fun ExerciseLibraryCard(exercise: Exercise) {
 }
 
 // -------------------------------------------------
-// ROBOT CONTROL SCREEN (futuro)
+// ROBOT CONTROL SCREEN (FUNCIONAL, COPIADA DEL MODO NIÑO)
 // -------------------------------------------------
 @Composable
-fun TherapistControlRobotScreen(userId: String) {   // <-- añadido userId
+fun TherapistControlRobotScreen() {
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+
+    var ipAddress by rememberSaveable { mutableStateOf("") }
+    var connectionStatus by remember { mutableStateOf("⚪ No conectado") }
+    var statusColor by remember { mutableStateOf(Color.Gray) }
+    var isConnecting by remember { mutableStateOf(false) }
+
+    suspend fun testConnection(ip: String): Boolean = withContext(Dispatchers.IO) {
+        if (ip.isBlank()) return@withContext false
+        try {
+            val url = URL("http://$ip/status")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 3000
+            connection.readTimeout = 3000
+            val responseCode = connection.responseCode
+            connection.disconnect()
+            responseCode == 200
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun sendCommand(ip: String, endpoint: String, method: String = "GET", body: String? = null): String? =
+        withContext(Dispatchers.IO) {
+            if (ip.isBlank()) return@withContext null
+            try {
+                val url = URL("http://$ip$endpoint")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = method
+                connection.connectTimeout = 3000
+                connection.readTimeout = 3000
+                if (method == "POST" && body != null) {
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", "application/json")
+                    connection.outputStream.use { os ->
+                        os.write(body.toByteArray())
+                    }
+                }
+                val responseCode = connection.responseCode
+                val response = if (responseCode == 200) {
+                    connection.inputStream.bufferedReader().use { it.readText() }
+                } else {
+                    null
+                }
+                connection.disconnect()
+                response
+            } catch (e: Exception) {
+                null
+            }
+        }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
+            .verticalScroll(scrollState)
+            .padding(horizontal = 20.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            "Control Avanzado del Robot",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF0066A1)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Calibración y pruebas",
-            fontSize = 14.sp,
-            color = Color.Gray
-        )
-        Spacer(modifier = Modifier.height(24.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                Icons.Default.Gamepad,
+                contentDescription = null,
+                tint = Color(0xFF0066A1),
+                modifier = Modifier.size(32.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "Control del Robot",
+                fontSize = 26.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF0066A1)
+            )
+        }
 
-        // Estado del robot
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Configuración de IP
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFE1F5FE))
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFF9F7F3)),
+            elevation = CardDefaults.cardElevation(4.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.Info, contentDescription = "Estado", tint = Color(0xFF0066A1))
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text("Estado del robot", fontWeight = FontWeight.Bold)
-                    Text("Conectado · Batería 85%", fontSize = 14.sp, color = Color.Gray)
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    "Dirección del Robot",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0066A1)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = ipAddress,
+                    onValueChange = { ipAddress = it },
+                    placeholder = { Text("Ej: 192.168.1.100") },
+                    leadingIcon = { Icon(Icons.Default.Computer, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF0066A1),
+                        unfocusedBorderColor = Color.LightGray,
+                        focusedLabelColor = Color(0xFF0066A1)
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .clip(CircleShape)
+                                .background(statusColor)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(connectionStatus, fontSize = 14.sp, color = Color.Gray)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (ipAddress.isNotBlank()) {
+                                scope.launch {
+                                    isConnecting = true
+                                    connectionStatus = "🔄 Conectando..."
+                                    statusColor = Color(0xFFFFA500)
+                                    val success = testConnection(ipAddress)
+                                    if (success) {
+                                        connectionStatus = "✅ Conectado"
+                                        statusColor = Color(0xFF4CAF50)
+                                    } else {
+                                        connectionStatus = "❌ Error de conexión"
+                                        statusColor = Color.Red
+                                    }
+                                    isConnecting = false
+                                }
+                            }
+                        },
+                        enabled = ipAddress.isNotBlank() && !isConnecting,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (ipAddress.isNotBlank()) Color(0xFF0066A1) else Color.LightGray,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        if (isConnecting) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(if (isConnecting) "Conectando..." else "Conectar")
+                    }
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Controles direccionales
-        Text("Movimiento manual", fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+        if (statusColor == Color(0xFF4CAF50)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Android,
+                        contentDescription = "Robot",
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("Robot listo", fontWeight = FontWeight.Bold, color = Color(0xFF0066A1))
+                        Text("IP: $ipAddress", fontSize = 12.sp, color = Color.Gray)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        Text(
+            "Movimiento del LED",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF0066A1),
+            modifier = Modifier.align(Alignment.Start)
+        )
         Spacer(modifier = Modifier.height(12.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            ControlButtonAdv(icon = Icons.Default.ArrowUpward, text = "Avanzar", color = Color(0xFF2196F3))
-            ControlButtonAdv(icon = Icons.Default.ArrowBack, text = "Izquierda", color = Color(0xFF2196F3))
-            ControlButtonAdv(icon = Icons.Default.ArrowForward, text = "Derecha", color = Color(0xFF2196F3))
-            ControlButtonAdv(icon = Icons.Default.ArrowDownward, text = "Retroceder", color = Color(0xFF2196F3))
+            DirectionalButton(
+                icon = Icons.Default.ArrowUpward,
+                text = "Avanzar",
+                color = Color(0xFF0066A1),
+                onClick = {
+                    if (ipAddress.isNotBlank()) {
+                        scope.launch {
+                            sendCommand(ipAddress, "/led/on")
+                            connectionStatus = "💡 LED encendido"
+                        }
+                    }
+                }
+            )
+            DirectionalButton(
+                icon = Icons.Default.ArrowBack,
+                text = "Izquierda",
+                color = Color(0xFF0066A1),
+                onClick = {
+                    if (ipAddress.isNotBlank()) {
+                        scope.launch {
+                            sendCommand(ipAddress, "/command", "POST", """{"command":"blink","times":1}""")
+                            connectionStatus = "✨ Parpadeo 1 vez"
+                        }
+                    }
+                }
+            )
+            DirectionalButton(
+                icon = Icons.Default.ArrowForward,
+                text = "Derecha",
+                color = Color(0xFF0066A1),
+                onClick = {
+                    if (ipAddress.isNotBlank()) {
+                        scope.launch {
+                            sendCommand(ipAddress, "/command", "POST", """{"command":"blink","times":2}""")
+                            connectionStatus = "✨✨ Parpadeo 2 veces"
+                        }
+                    }
+                }
+            )
+            DirectionalButton(
+                icon = Icons.Default.ArrowDownward,
+                text = "Retroceder",
+                color = Color(0xFF0066A1),
+                onClick = {
+                    if (ipAddress.isNotBlank()) {
+                        scope.launch {
+                            sendCommand(ipAddress, "/led/off")
+                            connectionStatus = "💤 LED apagado"
+                        }
+                    }
+                }
+            )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // Velocidad
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(2.dp)
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFF9F7F3)),
+            elevation = CardDefaults.cardElevation(4.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Velocidad", fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Brillo del LED",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0066A1)
+                    )
+                    Text("🚀", fontSize = 20.sp)
+                }
                 Spacer(modifier = Modifier.height(8.dp))
+                var brightness by remember { mutableStateOf(100) }
                 Slider(
-                    value = 0.5f,
-                    onValueChange = {},
-                    valueRange = 0f..1f,
+                    value = brightness.toFloat(),
+                    onValueChange = {
+                        brightness = it.toInt()
+                        if (ipAddress.isNotBlank() && statusColor == Color(0xFF4CAF50)) {
+                            scope.launch {
+                                sendCommand(ipAddress, "/pwm/$brightness")
+                                connectionStatus = "💡 Brillo $brightness%"
+                            }
+                        }
+                    },
+                    valueRange = 0f..100f,
+                    steps = 9,
                     colors = SliderDefaults.colors(
                         thumbColor = Color(0xFF0066A1),
-                        activeTrackColor = Color(0xFF0066A1)
+                        activeTrackColor = Color(0xFF0066A1),
+                        inactiveTrackColor = Color(0xFFE0E0E0)
                     )
                 )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Lenta", fontSize = 12.sp)
-                    Text("Rápida", fontSize = 12.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("🐢 $brightness%", fontSize = 14.sp, color = Color.Gray)
+                    Text("🐰 100%", fontSize = 14.sp, color = Color.Gray)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // Acciones especiales
-        Text("Acciones", fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+        Text(
+            "Acciones adicionales",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF0066A1),
+            modifier = Modifier.align(Alignment.Start)
+        )
         Spacer(modifier = Modifier.height(12.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            OutlinedButton(
-                onClick = {},
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0066A1))
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(Icons.Default.Bluetooth, null)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Calibrar")
+                ActionButton(
+                    icon = Icons.Default.MusicNote,
+                    text = "Sonido",
+                    color = Color(0xFFB5EAD7),
+                    iconColor = Color(0xFF0066A1),
+                    onClick = {
+                        if (ipAddress.isNotBlank()) {
+                            scope.launch {
+                                sendCommand(ipAddress, "/command", "POST", """{"command":"pulse","duration":2}""")
+                                connectionStatus = "🎵 Efecto pulso"
+                            }
+                        }
+                    }
+                )
+                ActionButton(
+                    icon = Icons.Default.Lightbulb,
+                    text = "Luz",
+                    color = Color(0xFFFFF3B0),
+                    iconColor = Color(0xFF0066A1),
+                    onClick = {
+                        if (ipAddress.isNotBlank()) {
+                            scope.launch {
+                                sendCommand(ipAddress, "/command", "POST", """{"command":"set","state":true}""")
+                                connectionStatus = "💡 Luz encendida"
+                            }
+                        }
+                    }
+                )
             }
-            Button(
-                onClick = {},
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(Icons.Default.PlayArrow, null)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Iniciar terapia")
+                ActionButton(
+                    icon = Icons.Default.EmojiEmotions,
+                    text = "Bailar",
+                    color = Color(0xFFFFC8A2),
+                    iconColor = Color(0xFF0066A1),
+                    onClick = {
+                        if (ipAddress.isNotBlank()) {
+                            scope.launch {
+                                sendCommand(ipAddress, "/command", "POST", """{"command":"blink","times":5}""")
+                                connectionStatus = "🕺 Baile de luces"
+                            }
+                        }
+                    }
+                )
+                ActionButton(
+                    icon = Icons.Default.Tune,
+                    text = "Calibrar",
+                    color = Color(0xFFD4F1F9),
+                    iconColor = Color(0xFF0066A1),
+                    onClick = {
+                        connectionStatus = "⚙️ Calibrando..."
+                    }
+                )
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         Button(
-            onClick = {},
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-        ) {
-            Icon(Icons.Default.Stop, null)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Parada de emergencia")
-        }
-    }
-}
-
-@Composable
-fun ControlButtonAdv(icon: ImageVector, text: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(
-            onClick = {},
+            onClick = {
+                if (ipAddress.isNotBlank()) {
+                    scope.launch {
+                        sendCommand(ipAddress, "/led/off")
+                        connectionStatus = "🛑 EMERGENCIA - LED apagado"
+                    }
+                }
+            },
             modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(color.copy(alpha = 0.1f))
+                .fillMaxWidth()
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF0066A1),
+                contentColor = Color.White
+            ),
+            shape = RoundedCornerShape(16.dp),
+            elevation = ButtonDefaults.buttonElevation(6.dp)
         ) {
-            Icon(icon, contentDescription = text, tint = color)
+            Icon(Icons.Default.Warning, contentDescription = "Parar")
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("¡DETENER EMERGENCIA!", fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
-        Text(text, fontSize = 12.sp, color = color, modifier = Modifier.padding(top = 4.dp))
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
 // -------------------------------------------------
-// REPORTS SCREEN (futuro)
+// REPORTS SCREEN (SIMULADA, IGUAL QUE ANTES)
 // -------------------------------------------------
 @Composable
-fun TherapistReportsScreen(userId: String) {   // <-- añadido userId
+fun TherapistReportsScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -776,7 +1067,6 @@ fun TherapistReportsScreen(userId: String) {   // <-- añadido userId
         )
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Selector de paciente simulado
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -798,7 +1088,6 @@ fun TherapistReportsScreen(userId: String) {   // <-- añadido userId
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Gráfico de barras simulado
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -808,7 +1097,6 @@ fun TherapistReportsScreen(userId: String) {   // <-- añadido userId
             Column(modifier = Modifier.padding(20.dp)) {
                 Text("Frecuencia de ejercicios", fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
-                // Barras horizontales (simulación)
                 BarChartItem("Marcha", 8, 12)
                 BarChartItem("Alcance", 5, 12)
                 BarChartItem("Coordinación", 3, 12)
@@ -818,7 +1106,6 @@ fun TherapistReportsScreen(userId: String) {   // <-- añadido userId
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Tarjetas de resumen
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -885,10 +1172,10 @@ fun BarChartItem(label: String, value: Int, max: Int) {
 }
 
 // -------------------------------------------------
-// ABOUT PROJECT SCREEN (futuro)
+// ABOUT PROJECT SCREEN (SIMULADA)
 // -------------------------------------------------
 @Composable
-fun TherapistAboutProjectScreen(userId: String) {   // <-- añadido userId
+fun TherapistAboutProjectScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -942,6 +1229,86 @@ fun TherapistAboutProjectScreen(userId: String) {   // <-- añadido userId
                     containerColor = Color(0xFFE1F5FE)
                 ),
                 border = null
+            )
+        }
+    }
+}
+
+// -------------------------------------------------
+// BOTONES REUTILIZABLES
+// -------------------------------------------------
+@Composable
+fun DirectionalButton(
+    icon: ImageVector,
+    text: String,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier
+                .size(70.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.2f))
+                .border(2.dp, color, CircleShape)
+                .shadow(elevation = 4.dp, shape = CircleShape)
+        ) {
+            Icon(
+                icon,
+                contentDescription = text,
+                tint = color,
+                modifier = Modifier.size(32.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = color.copy(alpha = 0.9f)
+        )
+    }
+}
+
+@Composable
+fun ActionButton(
+    icon: ImageVector,
+    text: String,
+    color: Color,
+    iconColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .height(72.dp)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = color),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp)
+                .clickable { onClick() },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = text,
+                tint = iconColor,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = iconColor
             )
         }
     }

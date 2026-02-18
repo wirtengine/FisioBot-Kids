@@ -40,4 +40,16 @@ class UserRepository {
             // Manejar error
         }
     }
+    suspend fun getPatientsByTherapist(therapistId: String): List<RoboUser> {
+        return try {
+            val snapshot = db.collection("users")
+                .whereEqualTo("role", "child")
+                .whereEqualTo("therapistId", therapistId)
+                .get()
+                .await()
+            snapshot.toObjects(RoboUser::class.java)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 }

@@ -9,5 +9,6 @@ data class RoboUser(
     val age: Int = 0,
     val role: String = "child",
     val code: String = "",
+    val therapistId: String = "",
     val createdAt: Timestamp = Timestamp.now()
 )
