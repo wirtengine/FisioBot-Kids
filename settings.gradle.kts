@@ -16,9 +16,17 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+<<<<<<< HEAD
         maven { url = uri("https://jitpack.io") }   // ← añadido para MPAndroidChart
     }
 }
 
 rootProject.name = "FisioBotKids"
 include(":app")
+=======
+    }
+}
+
+rootProject.name = "Roboapp"
+include(":app")
+>>>>>>> 5a7cd6fbbd02e6e979d14afa24f85d0f8fe13f1a
