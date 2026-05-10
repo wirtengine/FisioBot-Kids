@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-<<<<<<< HEAD
 
-=======
     <uses-permission android:name="android.permission.INTERNET"/>
->>>>>>> 5a7cd6fbbd02e6e979d14afa24f85d0f8fe13f1a
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -14,27 +12,23 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-<<<<<<< HEAD
-        android:theme="@style/Theme.FisioBotKids">
-=======
-        android:theme="@style/Theme.Roboapp"
+        android:theme="@style/Theme.FisioBotKids"
         android:usesCleartextTraffic="true">
->>>>>>> 5a7cd6fbbd02e6e979d14afa24f85d0f8fe13f1a
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-<<<<<<< HEAD
             android:theme="@style/Theme.FisioBotKids">
-=======
-            android:theme="@style/Theme.Roboapp">
->>>>>>> 5a7cd6fbbd02e6e979d14afa24f85d0f8fe13f1a
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
+
     </application>
 
 </manifest>

@@ -1,20 +1,13 @@
 {
   "project_info": {
-<<<<<<< HEAD
     "project_number": "182854886047",
     "firebase_url": "https://fisiobotkids-default-rtdb.firebaseio.com",
     "project_id": "fisiobotkids",
     "storage_bucket": "fisiobotkids.firebasestorage.app"
-=======
-    "project_number": "599135326123",
-    "project_id": "roboapp-8a89e",
-    "storage_bucket": "roboapp-8a89e.firebasestorage.app"
->>>>>>> 5a7cd6fbbd02e6e979d14afa24f85d0f8fe13f1a
   },
   "client": [
     {
       "client_info": {
-<<<<<<< HEAD
         "mobilesdk_app_id": "1:182854886047:android:a3bf10d602a1030d60b8aa",
         "android_client_info": {
           "package_name": "com.example.fisiobotkids"
@@ -24,44 +17,11 @@
       "api_key": [
         {
           "current_key": "AIzaSyDxm9p0qOTyY220iPGX0iVq3-zIDTEmIek"
-=======
-        "mobilesdk_app_id": "1:599135326123:android:0659f9f775487b8a840cee",
-        "android_client_info": {
-          "package_name": "com.example.roboapp"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "599135326123-7j42it3e82d8mj20qi16pagpcdm5hbuo.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.roboapp",
-            "certificate_hash": "7db7471ca6fbd338c20056b2075cdfaca65a32e2"
-          }
-        },
-        {
-          "client_id": "599135326123-nlfa9rk39gh2ngej4eb185sr87ec3gap.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyBlqahz-Wy0uR9wOrbhuogHry0zV89SeJQ"
->>>>>>> 5a7cd6fbbd02e6e979d14afa24f85d0f8fe13f1a
         }
       ],
       "services": {
         "appinvite_service": {
-<<<<<<< HEAD
           "other_platform_oauth_client": []
-=======
-          "other_platform_oauth_client": [
-            {
-              "client_id": "599135326123-nlfa9rk39gh2ngej4eb185sr87ec3gap.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
->>>>>>> 5a7cd6fbbd02e6e979d14afa24f85d0f8fe13f1a
         }
       }
     }

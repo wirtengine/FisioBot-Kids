@@ -1,9 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-<<<<<<< HEAD
     <style name="Theme.FisioBotKids" parent="android:Theme.Material.Light.NoActionBar" />
-=======
-    <style name="Theme.Roboapp" parent="android:Theme.Material.Light.NoActionBar" />
->>>>>>> 5a7cd6fbbd02e6e979d14afa24f85d0f8fe13f1a
 </resources>
